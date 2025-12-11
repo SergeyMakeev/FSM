@@ -157,7 +157,8 @@ template <typename StateEnum, typename ContextType> class StateMachine
     StateMachine(StateEnum initialState, ContextType* contextData = nullptr)
         : contextPointer(contextData)
         , currentActiveState(initialState)
-        , allStateCallbacks{} // Value-initialize all callbacks (std::function default = empty)
+        , lastEnteredState(StateEnum::Count) // Initialize to invalid state to trigger onEnter on first update
+        , allStateCallbacks{}                 // Value-initialize all callbacks (std::function default = empty)
     {
         assert(initialState < StateEnum::Count && "Initial state is invalid!");
     }
@@ -227,14 +228,14 @@ template <typename StateEnum, typename ContextType> class StateMachine
             // Get the callbacks for our current state
             StateCallbacks& currentCallbacks = allStateCallbacks[getStateIndex(currentActiveState)];
 
-            // First time ever? Call onEnter for the initial state
-            if (isFirstUpdate)
+            // If we haven't entered this state yet, call onEnter
+            if (currentActiveState != lastEnteredState)
             {
                 if (currentCallbacks.onEnter)
                 {
                     currentCallbacks.onEnter(contextPointer, currentTime);
                 }
-                isFirstUpdate = false;
+                lastEnteredState = currentActiveState;
             }
 
             // If there's no update callback, this state can't transition, so we're done
@@ -270,13 +271,8 @@ template <typename StateEnum, typename ContextType> class StateMachine
 
             currentActiveState = nextState;
 
-            StateCallbacks& nextCallbacks = allStateCallbacks[getStateIndex(currentActiveState)];
-            if (nextCallbacks.onEnter)
-            {
-                nextCallbacks.onEnter(contextPointer, currentTime);
-            }
-
-            // Loop continues - allows instant chained transitions (StateA -> StateB -> StateC in one frame)
+            // Loop continues to handle the new state - onEnter will be called on next iteration
+            // This allows instant chained transitions (StateA -> StateB -> StateC in one frame)
         }
 
         // If we get here, we did 256+ transitions in one update - that's definitely wrong!
@@ -286,7 +282,7 @@ template <typename StateEnum, typename ContextType> class StateMachine
   private:
     ContextType* contextPointer;
     StateEnum currentActiveState;
-    bool isFirstUpdate = true;
+    StateEnum lastEnteredState;                        // Track which state we last called onEnter for
     bool hasStartedUpdating = false;                   // Prevent configuring states after update() is called
     StateCallbacks allStateCallbacks[TotalStateCount]; // Array of callbacks, one per state
 };
