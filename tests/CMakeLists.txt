@@ -20,6 +20,7 @@ enable_testing()
 add_executable(fsm_tests
     test_fsm_basic.cpp
     test_fsm_performance.cpp
+    test_fsm_single_transition.cpp
 )
 
 # Link against FSM library and GoogleTest

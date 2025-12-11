@@ -30,7 +30,7 @@ struct TestContext
 TEST(FSMTest, CanCreateStateMachine)
 {
     TestContext context;
-    StateMachine<TestState, TestContext> fsm(TestState::Idle, &context);
+    Fsm<TestState, TestContext, TransitionPolicy::Immediate> fsm(TestState::Idle, &context);
 
     EXPECT_EQ(fsm.getCurrentState(), TestState::Idle);
     EXPECT_EQ(fsm.getContext(), &context);
@@ -42,7 +42,7 @@ TEST(FSMTest, CanAccessContext)
     TestContext context;
     context.enterCount = 42;
 
-    StateMachine<TestState, TestContext> fsm(TestState::Idle, &context);
+    Fsm<TestState, TestContext, TransitionPolicy::Immediate> fsm(TestState::Idle, &context);
 
     EXPECT_EQ(fsm.getContext()->enterCount, 42);
 }
@@ -51,7 +51,7 @@ TEST(FSMTest, CanAccessContext)
 TEST(FSMTest, CallsOnEnterOnFirstUpdate)
 {
     TestContext context;
-    StateMachine<TestState, TestContext> fsm(TestState::Idle, &context);
+    Fsm<TestState, TestContext, TransitionPolicy::Immediate> fsm(TestState::Idle, &context);
 
     fsm.state(TestState::Idle)
         .onEnter(
@@ -74,7 +74,7 @@ TEST(FSMTest, CallsOnEnterOnFirstUpdate)
 TEST(FSMTest, CallsOnUpdateEveryFrame)
 {
     TestContext context;
-    StateMachine<TestState, TestContext> fsm(TestState::Idle, &context);
+    Fsm<TestState, TestContext, TransitionPolicy::Immediate> fsm(TestState::Idle, &context);
 
     fsm.state(TestState::Idle)
         .onUpdate(
@@ -95,7 +95,7 @@ TEST(FSMTest, CallsOnUpdateEveryFrame)
 TEST(FSMTest, CanTransitionBetweenStates)
 {
     TestContext context;
-    StateMachine<TestState, TestContext> fsm(TestState::Idle, &context);
+    Fsm<TestState, TestContext, TransitionPolicy::Immediate> fsm(TestState::Idle, &context);
 
     // Configure Idle state to transition to Running
     fsm.state(TestState::Idle)
@@ -130,7 +130,7 @@ TEST(FSMTest, CanTransitionBetweenStates)
 TEST(FSMTest, CallsOnExitWhenLeavingState)
 {
     TestContext context;
-    StateMachine<TestState, TestContext> fsm(TestState::Idle, &context);
+    Fsm<TestState, TestContext, TransitionPolicy::Immediate> fsm(TestState::Idle, &context);
 
     fsm.state(TestState::Idle)
         .onExit(
@@ -154,7 +154,7 @@ TEST(FSMTest, CallsOnExitWhenLeavingState)
 TEST(FSMTest, CompleteStateTransitionLifecycle)
 {
     TestContext context;
-    StateMachine<TestState, TestContext> fsm(TestState::Idle, &context);
+    Fsm<TestState, TestContext, TransitionPolicy::Immediate> fsm(TestState::Idle, &context);
 
     fsm.state(TestState::Idle)
         .onEnter([](TestContext* ctx, double time) { ctx->enterCount++; })
@@ -177,7 +177,7 @@ TEST(FSMTest, CompleteStateTransitionLifecycle)
 TEST(FSMTest, StayInCurrentKeepsState)
 {
     TestContext context;
-    StateMachine<TestState, TestContext> fsm(TestState::Idle, &context);
+    Fsm<TestState, TestContext, TransitionPolicy::Immediate> fsm(TestState::Idle, &context);
 
     fsm.state(TestState::Idle)
         .onUpdate(
@@ -199,7 +199,7 @@ TEST(FSMTest, StayInCurrentKeepsState)
 TEST(FSMTest, SupportsChainedTransitions)
 {
     TestContext context;
-    StateMachine<TestState, TestContext> fsm(TestState::Idle, &context);
+    Fsm<TestState, TestContext, TransitionPolicy::Immediate> fsm(TestState::Idle, &context);
 
     // Idle immediately transitions to Running
     fsm.state(TestState::Idle)
@@ -225,7 +225,7 @@ TEST(FSMTest, SupportsChainedTransitions)
 // Test: State machine without context (nullptr)
 TEST(FSMTest, CanWorkWithoutContext)
 {
-    StateMachine<TestState, TestContext> fsm(TestState::Idle, nullptr);
+    Fsm<TestState, TestContext, TransitionPolicy::Immediate> fsm(TestState::Idle, nullptr);
 
     fsm.state(TestState::Idle)
         .onUpdate(
@@ -244,7 +244,7 @@ TEST(FSMTest, CanWorkWithoutContext)
 TEST(FSMTest, CanConfigureMultipleStates)
 {
     TestContext context;
-    StateMachine<TestState, TestContext> fsm(TestState::Idle, &context);
+    Fsm<TestState, TestContext, TransitionPolicy::Immediate> fsm(TestState::Idle, &context);
 
     fsm.state(TestState::Idle)
         .onUpdate(
@@ -305,7 +305,7 @@ TEST(FSMTest, CanConfigureMultipleStates)
 TEST(FSMTest, SupportsCapturingLambdas)
 {
     TestContext context;
-    StateMachine<TestState, TestContext> fsm(TestState::Idle, &context);
+    Fsm<TestState, TestContext, TransitionPolicy::Immediate> fsm(TestState::Idle, &context);
 
     // External state that can be captured
     int externalCounter = 0;

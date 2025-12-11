@@ -6,36 +6,66 @@
 #include <functional>
 #include <type_traits>
 
-/// @brief Represents the result of a state update - either stay or transition to a new state
-/// @details ONLY use the static factory methods: to() or stay()
-///
-/// Example:
-///   return StateTransition::to(MyState::Running);
-///   return StateTransition::stay();
+/*
+**State Transition Policy**
+
+Controls how many state transitions can occur in a single update() call.
+
+This choice affects how the FSM behaves when states immediately transition to other states.
+In some scenarios, you want instant chaining (player dies -> respawn -> idle all in one frame).
+In others, you want predictable single-step transitions for easier debugging and control.
+
+**Immediate**: Allows chained transitions in one update.
+When a state transitions, the new state's onEnter and onUpdate execute immediately in the same frame.
+This continues until a state returns stay() or the safety limit is reached.
+Best for: logic where multi-step transitions should happen atomically.
+
+**SingleTransition**: Only one transition per update.
+When a state transitions, we switch immediately but don't enter the new state until next update().
+This provides step-by-step execution that's easier to reason about and debug.
+Best for: complex state machines where you need fine-grained control over timing.
+*/
+enum class TransitionPolicy
+{
+    Immediate,
+    SingleTransition
+};
+
+/*
+**State Transition Decision**
+
+Return type for state update callbacks - tells the FSM whether to stay or transition.
+
+This design uses the Named Constructor idiom to prevent users from creating invalid transitions.
+The private constructor ensures you can only create transitions through to() or stay(),
+which makes the API self-documenting and prevents accidental misuse.
+
+Usage:
+  return StateTransition::to(MyState::Running);   // Switch to Running state
+  return StateTransition::stay();                 // Remain in current state
+
+The internal representation uses a uint64_t to store the target state value,
+which allows any enum type (regardless of underlying type) to be safely converted.
+The bool flag provides a fast check for the common "stay" case without comparing state values.
+*/
 class StateTransition
 {
   public:
-    /// @brief Transition to a different state
-    /// @param newState The state to transition to
-    /// @return StateTransition that will switch to the specified state
     template <typename StateType> [[nodiscard]] static constexpr StateTransition to(StateType newState) noexcept
     {
         static_assert(std::is_enum_v<StateType>, "State must be an enum type");
         return StateTransition(static_cast<uint64_t>(newState), false);
     }
 
-    /// @brief Stay in the current state (do not transition)
-    /// @return StateTransition that keeps the FSM in its current state
     [[nodiscard]] static constexpr StateTransition stay() noexcept { return StateTransition(0, true); }
 
   private:
-    // Allow FSM to access internals
-    template <typename, typename> friend class StateMachine;
+    template <typename, typename, TransitionPolicy> friend class Fsm;
 
     uint64_t targetStateValue;
     bool shouldRemainInCurrentState;
 
-    // Private constructor - users must use to() or stay()
+    // Private constructor forces use of named constructors to() and stay()
     explicit constexpr StateTransition(uint64_t stateValue, bool stayInState) noexcept
         : targetStateValue(stateValue)
         , shouldRemainInCurrentState(stayInState)
@@ -43,41 +73,71 @@ class StateTransition
     }
 };
 
-/// @brief High-performance Finite State Machine
-/// @tparam StateEnum Your enum class with states (MUST include a 'Count' value at the end)
-/// @tparam ContextType Your custom data structure to store state and game data
-///
-/// Example:
-///   enum class PlayerState { Idle, Running, Jumping, Count };
-///   struct PlayerData { float speed; int health; };
-///   StateMachine<PlayerState, PlayerData> fsm(PlayerState::Idle, &data);
-template <typename StateEnum, typename ContextType> class StateMachine
+/*
+**High-Performance Finite State Machine**
+
+A zero-allocation, header-only FSM designed for game engines and real-time systems.
+
+**Design Philosophy:**
+This FSM prioritizes performance and simplicity over flexibility. It uses fixed-size arrays
+instead of maps/vectors to avoid heap allocations and cache misses. State callbacks are stored
+in a compile-time-sized array indexed directly by the enum value for O(1) lookup.
+
+**Template Parameters:**
+- StateEnum: Your enum class defining all states. MUST end with a 'Count' sentinel value.
+- ContextType: Your game data struct. The FSM doesn't own this - you control the lifetime.
+- Policy: TransitionPolicy controlling single-step vs chained transitions (defaults to Immediate).
+
+**Performance Characteristics:**
+- State transitions: O(1)
+- Memory: Fixed at compile time, no heap allocations
+- Callbacks: std::function allows both stateless and capturing lambdas
+  Modern compilers optimize stateless lambdas to zero overhead
+
+**Usage Example:**
+  enum class PlayerState { Idle, Running, Jumping, Count };
+  struct PlayerData { float velocity; };
+
+  Fsm<PlayerState, PlayerData, TransitionPolicy::Immediate> fsm(PlayerState::Idle, &data);
+  // Or with single-step transitions:
+  Fsm<PlayerState, PlayerData, TransitionPolicy::SingleTransition> fsm(...);
+*/
+template <typename StateEnum, typename ContextType, TransitionPolicy Policy> class Fsm
 {
     static_assert(std::is_enum_v<StateEnum>, "StateEnum must be an enum or enum class");
 
   public:
     using TimeValue = double;
 
+    // Loop until we find a state that wants to stay or has no update callback
+    // The limit prevents infinite loops from buggy state logic
+    static constexpr size_t kMaxTransitionsPerFrame = 256;
+
   private:
-    // Convert state enum to array index
+    // Convert enum to array index for O(1) callback lookup
     [[nodiscard]] constexpr std::size_t getStateIndex(StateEnum state) const noexcept
     {
         using UnderlyingType = std::underlying_type_t<StateEnum>;
         return static_cast<std::size_t>(static_cast<UnderlyingType>(state));
     }
 
-    /// @brief Holds the three callbacks for each state (enter, update, exit)
-    /// @note Uses std::function to support both stateless and capturing lambdas
-    ///       Modern implementations optimize stateless lambdas to avoid overhead
+    /*
+    **State Callback Storage**
+
+    Each state has three optional callbacks: onEnter, onUpdate, and onExit.
+
+    We use std::function to support both stateless and capturing lambdas.
+    This adds some overhead compared to function pointers, but provides essential flexibility.
+    Modern compilers optimize stateless lambdas to have minimal cost.
+
+    The alternative would be templates (like std::visit), but that would require all states
+    to have the same callback types, which is too restrictive for a general FSM.
+    We prioritize ease of use over the last bit of performance here.
+    */
     struct StateCallbacks
     {
-        // Called once when entering this state
         using EnterCallback = std::function<void(ContextType*, TimeValue)>;
-
-        // Called every frame while in this state - returns transition decision
         using UpdateCallback = std::function<StateTransition(ContextType*, TimeValue)>;
-
-        // Called once when leaving this state
         using ExitCallback = std::function<void(ContextType*, TimeValue)>;
 
         EnterCallback onEnter;
@@ -86,43 +146,37 @@ template <typename StateEnum, typename ContextType> class StateMachine
     };
 
   public:
-    /// @brief Helper for configuring a state's callbacks with a fluent/chainable API
-    ///
-    /// Note: Supports both stateless and capturing lambdas via std::function.
-    ///       Stateless lambdas are optimized by the compiler with no overhead.
-    ///       For best performance, prefer storing data in ContextType when possible.
-    ///
-    /// Example:
-    ///   fsm.state(MyState::Idle)
-    ///      .onEnter([](MyContext* ctx, double time) { ctx->counter = 0; })
-    ///      .onUpdate([](MyContext* ctx, double time) {
-    ///          return StateTransition::stay();
-    ///      });
+    /*
+
+    This helper class provides a chainable interface for configuring state callbacks.
+    It holds a reference to the actual callback storage and allows method chaining.
+
+    The class is designed to be returned by value and then chained, like:
+      fsm.state(MyState::Idle)
+         .onEnter([](MyContext* ctx, double time) { ctx->counter = 0; })
+         .onUpdate([](MyContext* ctx, double time) { return StateTransition::stay(); });
+
+    The reference member makes this naturally non-copyable but moveable,
+    which is perfect for the return-by-value pattern we use.
+    This prevents accidental copies while still allowing the fluent syntax.
+
+    All callbacks are optional. States without onUpdate will never transition.
+    */
     class StateConfiguration
     {
       public:
-        /// @brief Set what happens when ENTERING this state (called once)
-        /// @param callback Function with signature: void(ContextType*, TimeValue)
-        /// @note Supports both stateless and capturing lambdas
         template <typename CallbackFunction> StateConfiguration& onEnter(CallbackFunction callback)
         {
             callbacks.onEnter = callback;
             return *this;
         }
 
-        /// @brief Set what happens every frame while IN this state
-        /// @param callback Function with signature: StateTransition(ContextType*, TimeValue)
-        /// @note Must return StateTransition::to() or stay()
-        /// @note Supports both stateless and capturing lambdas
         template <typename CallbackFunction> StateConfiguration& onUpdate(CallbackFunction callback)
         {
             callbacks.onUpdate = callback;
             return *this;
         }
 
-        /// @brief Set what happens when LEAVING this state (called once)
-        /// @param callback Function with signature: void(ContextType*, TimeValue)
-        /// @note Supports both stateless and capturing lambdas
         template <typename CallbackFunction> StateConfiguration& onExit(CallbackFunction callback)
         {
             callbacks.onExit = callback;
@@ -130,162 +184,205 @@ template <typename StateEnum, typename ContextType> class StateMachine
         }
 
       private:
-        friend class StateMachine;
+        friend class Fsm;
         StateCallbacks& callbacks;
 
         explicit StateConfiguration(StateCallbacks& cbs)
             : callbacks(cbs)
         {
         }
-
-        // Note: The reference member makes this class naturally non-copyable
-        // but moveable, which is exactly what we want for the return-by-value pattern
     };
 
   public:
     static constexpr std::size_t TotalStateCount = static_cast<std::size_t>(StateEnum::Count);
+
+    // We require the enum to have a Count sentinel value for compile-time array sizing
+    // The 255 limit is arbitrary but reasonable - if you need more states, you probably
+    // need a different architecture (hierarchical FSM, behavior trees, etc.)
     static_assert(TotalStateCount > 0 && TotalStateCount < 256,
                   "You must have between 1 and 255 states. Did you forget the 'Count' value in your enum?");
 
-    /// @brief Create a new state machine
-    /// @param initialState Which state to start in (onEnter will be called on first update)
-    /// @param contextData Pointer to your game/context data (optional, can be nullptr)
-    ///
-    /// Example:
-    ///   PlayerData data;
-    ///   StateMachine<PlayerState, PlayerData> fsm(PlayerState::Idle, &data);
-    StateMachine(StateEnum initialState, ContextType* contextData = nullptr)
+    /*
+    **Constructor**
+
+    Creates a new FSM starting in the specified initial state.
+    The state's onEnter callback will be called on the first update().
+
+    The context pointer is optional - pass nullptr if your state logic doesn't need external data.
+    The FSM does NOT take ownership of the context; you're responsible for its lifetime.
+    This design gives you full control over memory management and layout.
+
+    Example:
+      PlayerData data;
+      Fsm<PlayerState, PlayerData, TransitionPolicy::Immediate> fsm(PlayerState::Idle, &data);
+    */
+    Fsm(StateEnum initialState, ContextType* contextData = nullptr)
         : contextPointer(contextData)
         , currentActiveState(initialState)
-        , lastEnteredState(StateEnum::Count) // Initialize to invalid state to trigger onEnter on first update
-        , allStateCallbacks{}                 // Value-initialize all callbacks (std::function default = empty)
+        , lastEnteredState(StateEnum::Count)
+        , allStateCallbacks{}
     {
+        // Verify initial state is valid at runtime
+        // We use Count as a sentinel/invalid value for lastEnteredState,
+        // so initialState must be less than Count
         assert(initialState < StateEnum::Count && "Initial state is invalid!");
     }
 
-    // Prevent copying (state machines should not be copied accidentally)
-    StateMachine(const StateMachine&) = delete;
-    StateMachine& operator=(const StateMachine&) = delete;
+    Fsm(const Fsm&) = delete;
+    Fsm& operator=(const Fsm&) = delete;
+    Fsm(Fsm&&) = default;
+    Fsm& operator=(Fsm&&) = default;
 
-    // Allow moving if needed (not noexcept due to std::function)
-    StateMachine(StateMachine&&) = default;
-    StateMachine& operator=(StateMachine&&) = default;
+    /*
+    **Configure a state's callbacks**
 
-    /// @brief Set up callbacks for a specific state
-    /// @param state Which state to configure
-    /// @return StateConfiguration object for chaining .onEnter().onUpdate().onExit()
-    ///
-    /// Example:
-    ///   fsm.state(PlayerState::Jumping)
-    ///      .onEnter([](PlayerData* ctx, double time) { ctx->velocity = 10; })
-    ///      .onUpdate([](PlayerData* ctx, double time) {
-    ///          return StateTransition::stay();
-    ///      });
+    Returns a configuration object for setting up onEnter, onUpdate, and onExit.
+    Must be called BEFORE the first update() - we don't allow runtime reconfiguration
+
+    Example:
+      fsm.state(PlayerState::Jumping)
+         .onEnter([](PlayerData* ctx, double time) { ctx->velocity = 10; })
+         .onUpdate([](PlayerData* ctx, double time) { return StateTransition::stay(); });
+    */
     [[nodiscard]] StateConfiguration state(StateEnum state) noexcept
     {
+        // Validate the state enum value is in range
         assert(state < StateEnum::Count && "Invalid state - check your enum!");
-        assert(!hasStartedUpdating && "Cannot configure states after calling update() - configure all states first!");
+        // Prevent reconfiguration after FSM has started running
+        assert(lastEnteredState == StateEnum::Count && "Cannot configure states after calling update() - configure all states first!");
         return StateConfiguration(allStateCallbacks[getStateIndex(state)]);
     }
 
-    /// @brief Get which state the machine is currently in
-    /// @return The current state enum value
     [[nodiscard]] StateEnum getCurrentState() const noexcept { return currentActiveState; }
-
-    /// @brief Access your context/game data
-    /// @return Pointer to your context data (might be nullptr if you didn't provide one)
     [[nodiscard]] ContextType* getContext() noexcept { return contextPointer; }
-
-    /// @brief Access your context/game data (const version)
     [[nodiscard]] const ContextType* getContext() const noexcept { return contextPointer; }
 
-    /// @brief Update the state machine for this frame
-    /// @param currentTime The current game/world time (passed to your callbacks)
-    ///
-    /// Call this once per frame/tick. It will:
-    /// 1. Call onEnter() if this is the first update or if we just transitioned
-    /// 2. Call onUpdate() which returns whether to stay or switch states
-    /// 3. If switching: call onExit(), change state, call new state's onEnter()
-    ///
-    /// Note: Supports instant chained transitions (can switch through multiple states in one update)
+    /*
+    **Update the FSM**
+
+    The behavior depends on which TransitionPolicy you chose:
+
+    **With Immediate Policy:**
+    Allows chained transitions in a single update. When a state transitions, the new state
+    is entered and updated immediately in the same frame. This continues until a state
+    returns stay() or we hit the safety limit.
+
+    Flow: onEnter (if needed) -> onUpdate -> (if transitioning: onExit -> switch) -> loop
+
+    **With SingleTransition Policy:**
+    Only one transition per update. When a state transitions, we switch immediately but
+    don't enter the new state until the next update() call. This provides step-by-step
+    execution that's easier to debug.
+
+    Flow: onEnter (if needed) -> onUpdate -> (if transitioning: onExit -> switch) -> done
+
+    The safety limit of kMaxTransitionsPerFrame transitions exists to catch infinite loops in your state logic.
+    If you hit this, you have a bug (e.g., StateA -> StateB -> StateA -> StateB...).
+    */
     inline void update(TimeValue currentTime)
     {
-        hasStartedUpdating = true;
-
-        // Safety check: make sure state is valid
+        // Sanity check - this should never happen unless there's memory corruption
         if (currentActiveState >= StateEnum::Count)
         {
             assert(false && "State machine is in an invalid state! This should never happen.");
             return;
         }
 
-        // Prevent infinite loops (e.g., StateA -> StateB -> StateA -> StateB...)
-        // 256 transitions in one frame is definitely a bug in your state logic
-        constexpr size_t kMaxTransitionsPerFrame = 256;
-
-        for (size_t transitionCount = 0; transitionCount < kMaxTransitionsPerFrame; ++transitionCount)
+        if constexpr (Policy == TransitionPolicy::Immediate)
         {
-            // Get the callbacks for our current state
-            StateCallbacks& currentCallbacks = allStateCallbacks[getStateIndex(currentActiveState)];
-
-            // If we haven't entered this state yet, call onEnter
-            if (currentActiveState != lastEnteredState)
+            for (size_t transitionCount = 0; transitionCount < kMaxTransitionsPerFrame; ++transitionCount)
             {
-                if (currentCallbacks.onEnter)
+                if (!processStateStep(currentTime))
                 {
-                    currentCallbacks.onEnter(contextPointer, currentTime);
+                    return;
                 }
-                lastEnteredState = currentActiveState;
             }
 
-            // If there's no update callback, this state can't transition, so we're done
-            if (!currentCallbacks.onUpdate)
-            {
-                return;
-            }
-
-            // Run the state's update logic - it will tell us whether to stay or switch
-            const StateTransition transitionDecision = currentCallbacks.onUpdate(contextPointer, currentTime);
-
-            // Should we stay in the current state?
-            if (transitionDecision.shouldRemainInCurrentState)
-            {
-                return; // Yes, we're done for this frame
-            }
-
-            // We're switching to a new state!
-            const StateEnum nextState = static_cast<StateEnum>(transitionDecision.targetStateValue);
-
-            // Validate the transition makes sense
-            if (nextState == currentActiveState || nextState >= StateEnum::Count)
-            {
-                // Trying to transition to same state or invalid state - ignore and stay
-                return;
-            }
-
-            // Execute the transition: Exit old state -> Switch -> Enter new state
-            if (currentCallbacks.onExit)
-            {
-                currentCallbacks.onExit(contextPointer, currentTime);
-            }
-
-            currentActiveState = nextState;
-
-            // Loop continues to handle the new state - onEnter will be called on next iteration
-            // This allows instant chained transitions (StateA -> StateB -> StateC in one frame)
+            // we transitioned too many times in one frame
+            assert(false && "State machine exceeded maximum transitions per frame! Do you have an infinite loop in the state logic?");
         }
-
-        // If we get here, we did 256+ transitions in one update - that's definitely wrong!
-        assert(false && "State machine exceeded maximum transitions per frame! You have an infinite loop in your state logic.");
+        else // TransitionPolicy::SingleTransition
+        {
+            // Process one step and stop, even if a transition occurred
+            // The new state will be entered on the next update() call
+            processStateStep(currentTime);
+        }
     }
 
   private:
+    /*
+    **Process one state step**
+
+    This is the core FSM logic extracted into a helper to avoid code duplication
+    between the two transition policies.
+
+    Steps:
+    1. If we haven't entered this state yet, call onEnter
+    2. Call onUpdate to get the state's transition decision
+    3. If staying, return false
+    4. If transitioning, validate the target, call onExit, switch states, return true
+
+    The return value tells the caller whether a transition occurred, which determines
+    whether to continue looping (Immediate policy) or stop (SingleTransition policy).
+
+    States without an onUpdate callback are terminal - they can never transition out.
+    This is useful for "game over" or other final states.
+    */
+    inline bool processStateStep(TimeValue currentTime)
+    {
+        StateCallbacks& currentCallbacks = allStateCallbacks[getStateIndex(currentActiveState)];
+
+        // Check if we need to call onEnter for this state
+        // lastEnteredState tracks which state we last called onEnter for
+        if (currentActiveState != lastEnteredState)
+        {
+            if (currentCallbacks.onEnter)
+            {
+                currentCallbacks.onEnter(contextPointer, currentTime);
+            }
+            lastEnteredState = currentActiveState;
+        }
+
+        // States without onUpdate are terminal - they can never transition
+        if (!currentCallbacks.onUpdate)
+        {
+            return false;
+        }
+
+        const StateTransition transitionDecision = currentCallbacks.onUpdate(contextPointer, currentTime);
+
+        if (transitionDecision.shouldRemainInCurrentState)
+        {
+            return false;
+        }
+
+        const StateEnum nextState = static_cast<StateEnum>(transitionDecision.targetStateValue);
+
+        // Ignore invalid transitions - treat them as stay()
+        // This includes transitioning to the same state or to an out-of-range state
+        if (nextState == currentActiveState || nextState >= StateEnum::Count)
+        {
+            return false;
+        }
+
+        // Execute the transition
+        if (currentCallbacks.onExit)
+        {
+            currentCallbacks.onExit(contextPointer, currentTime);
+        }
+
+        currentActiveState = nextState;
+        return true;
+    }
+
     ContextType* contextPointer;
     StateEnum currentActiveState;
-    StateEnum lastEnteredState;                        // Track which state we last called onEnter for
-    bool hasStartedUpdating = false;                   // Prevent configuring states after update() is called
-    StateCallbacks allStateCallbacks[TotalStateCount]; // Array of callbacks, one per state
-};
 
-// Backwards compatibility: allow using "Fsm" as the class name
-template <typename StateEnum, typename ContextType> using Fsm = StateMachine<StateEnum, ContextType>;
+    // Dual-purpose: tracks which state we last called onEnter for,
+    // AND serves as a "has FSM started" flag (equals Count before first update)
+    StateEnum lastEnteredState;
+
+    // Fixed-size array indexed by state enum value for O(1) callback lookup
+    // This avoids heap allocations and provides excellent cache locality
+    StateCallbacks allStateCallbacks[TotalStateCount];
+};

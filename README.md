@@ -10,7 +10,7 @@ A modern, header-only C++17 finite state machine library designed for game devel
 - **High performance**: Optimized for game loops with minimal overhead
 - **Type-safe**: Uses C++ enum classes for compile-time state validation
 - **Flexible callbacks**: Supports both stateless and capturing lambdas via std::function
-- **Chained transitions**: Automatically handles instant state transitions in a single update
+- **Configurable transition policy**: Choose between immediate chained transitions or single-step transitions
 - **Zero heap allocations**: All state data stored in fixed arrays
 - **Clean API**: Fluent interface for easy state configuration
 
@@ -76,6 +76,40 @@ fsm.state(PlayerState::Running)
     });
 ```
 
+### Transition Policies
+
+The FSM supports two transition policies that control how state changes happen during `update()`:
+
+#### Immediate (Default)
+Allows multiple state transitions in a single `update()` call. When a state returns a transition, the FSM immediately enters the new state and calls its `onUpdate()` in the same frame.
+
+```cpp
+// Default behavior - chained transitions
+StateMachine<PlayerState, PlayerData> fsm(PlayerState::Idle, &data);
+// or explicitly:
+StateMachine<PlayerState, PlayerData, TransitionPolicy::Immediate> fsm(PlayerState::Idle, &data);
+```
+
+#### SingleTransition
+Only one state transition per `update()` call. When a state returns a transition, the FSM switches to the new state but does NOT call the new state's `onEnter()` or `onUpdate()` until the next `update()` call. This provides more predictable, step-by-step behavior.
+
+```cpp
+StateMachine<PlayerState, PlayerData, TransitionPolicy::SingleTransition> fsm(PlayerState::Idle, &data);
+```
+
+**Example comparison:**
+
+```cpp
+// With Immediate policy (default):
+// - Single update(): Idle -> Running -> Jumping (if both transitions happen)
+// - All onEnter and onUpdate callbacks execute in one frame
+
+// With SingleTransition policy:
+// - Update 1: Idle transitions to Running (Running not entered yet)
+// - Update 2: Running enters and transitions to Jumping (Jumping not entered yet)
+// - Update 3: Jumping enters and stays
+```
+
 ## Building
 
 ### As a CMake Subproject
@@ -101,6 +135,13 @@ ctest -C Debug
 
 ## API Overview
 
+### TransitionPolicy
+
+Controls how state transitions are processed:
+
+- `TransitionPolicy::Immediate` - Allow multiple transitions per `update()` (default)
+- `TransitionPolicy::SingleTransition` - Only one transition per `update()`
+
 ### StateTransition
 
 - `StateTransition::to(NewState)` - Transition to a different state
@@ -108,6 +149,12 @@ ctest -C Debug
 
 ### StateMachine
 
+Template parameters:
+- `StateEnum` - Your enum class with states (must include a `Count` value)
+- `ContextType` - Your custom data structure
+- `Policy` - Transition policy (optional, defaults to `TransitionPolicy::Immediate`)
+
+Methods:
 - `state(state)` - Configure callbacks for a state (returns StateConfiguration)
 - `update(time)` - Update the FSM for the current frame
 - `getCurrentState()` - Get the current state

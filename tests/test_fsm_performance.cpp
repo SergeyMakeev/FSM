@@ -29,7 +29,7 @@ template <typename Func> double measureMs(Func&& func)
 TEST(FSMPerformanceTest, StatelessLambdasAreFast)
 {
     PerfContext context;
-    StateMachine<PerfState, PerfContext> fsm(PerfState::State1, &context);
+    Fsm<PerfState, PerfContext, TransitionPolicy::Immediate> fsm(PerfState::State1, &context);
 
     // Configure with stateless lambdas
     fsm.state(PerfState::State1)
@@ -90,7 +90,7 @@ TEST(FSMPerformanceTest, StatelessLambdasAreFast)
 TEST(FSMPerformanceTest, CapturingLambdasWork)
 {
     PerfContext context;
-    StateMachine<PerfState, PerfContext> fsm(PerfState::State1, &context);
+    Fsm<PerfState, PerfContext, TransitionPolicy::Immediate> fsm(PerfState::State1, &context);
 
     // External counter for demonstration
     int externalCounter = 0;
@@ -164,7 +164,7 @@ TEST(FSMPerformanceTest, StatelessVsCapturingComparison)
         // Test stateless
         {
             PerfContext context;
-            StateMachine<PerfState, PerfContext> fsm(PerfState::State1, &context);
+            Fsm<PerfState, PerfContext, TransitionPolicy::Immediate> fsm(PerfState::State1, &context);
 
             fsm.state(PerfState::State1)
                 .onUpdate(
@@ -185,7 +185,7 @@ TEST(FSMPerformanceTest, StatelessVsCapturingComparison)
         // Test capturing
         {
             PerfContext context;
-            StateMachine<PerfState, PerfContext> fsm(PerfState::State1, &context);
+            Fsm<PerfState, PerfContext, TransitionPolicy::Immediate> fsm(PerfState::State1, &context);
 
             int dummy = 0;
             fsm.state(PerfState::State1)
