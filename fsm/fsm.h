@@ -6,19 +6,19 @@
 #include <functional>
 #include <type_traits>
 
-/// @brief Represents the result of a state update - either stay or switch to a new state
-/// @details ONLY use the static factory methods: switchTo() or stayInCurrent()
+/// @brief Represents the result of a state update - either stay or transition to a new state
+/// @details ONLY use the static factory methods: to() or stay()
 ///
 /// Example:
-///   return StateTransition::switchTo(MyState::Running);
-///   return StateTransition::stayInCurrent();
+///   return StateTransition::to(MyState::Running);
+///   return StateTransition::stay();
 class StateTransition
 {
   public:
     /// @brief Transition to a different state
     /// @param newState The state to transition to
     /// @return StateTransition that will switch to the specified state
-    template <typename StateType> [[nodiscard]] static constexpr StateTransition switchTo(StateType newState) noexcept
+    template <typename StateType> [[nodiscard]] static constexpr StateTransition to(StateType newState) noexcept
     {
         static_assert(std::is_enum_v<StateType>, "State must be an enum type");
         return StateTransition(static_cast<uint64_t>(newState), false);
@@ -26,7 +26,7 @@ class StateTransition
 
     /// @brief Stay in the current state (do not transition)
     /// @return StateTransition that keeps the FSM in its current state
-    [[nodiscard]] static constexpr StateTransition stayInCurrent() noexcept { return StateTransition(0, true); }
+    [[nodiscard]] static constexpr StateTransition stay() noexcept { return StateTransition(0, true); }
 
   private:
     // Allow FSM to access internals
@@ -35,7 +35,7 @@ class StateTransition
     uint64_t targetStateValue;
     bool shouldRemainInCurrentState;
 
-    // Private constructor - users must use switchTo() or stayInCurrent()
+    // Private constructor - users must use to() or stay()
     explicit constexpr StateTransition(uint64_t stateValue, bool stayInState) noexcept
         : targetStateValue(stateValue)
         , shouldRemainInCurrentState(stayInState)
@@ -93,10 +93,10 @@ template <typename StateEnum, typename ContextType> class StateMachine
     ///       For best performance, prefer storing data in ContextType when possible.
     ///
     /// Example:
-    ///   fsm.configureState(MyState::Idle)
+    ///   fsm.state(MyState::Idle)
     ///      .onEnter([](MyContext* ctx, double time) { ctx->counter = 0; })
     ///      .onUpdate([](MyContext* ctx, double time) {
-    ///          return StateTransition::stayInCurrent();
+    ///          return StateTransition::stay();
     ///      });
     class StateConfiguration
     {
@@ -112,7 +112,7 @@ template <typename StateEnum, typename ContextType> class StateMachine
 
         /// @brief Set what happens every frame while IN this state
         /// @param callback Function with signature: StateTransition(ContextType*, TimeValue)
-        /// @note Must return StateTransition::switchTo() or stayInCurrent()
+        /// @note Must return StateTransition::to() or stay()
         /// @note Supports both stateless and capturing lambdas
         template <typename CallbackFunction> StateConfiguration& onUpdate(CallbackFunction callback)
         {
@@ -179,7 +179,7 @@ template <typename StateEnum, typename ContextType> class StateMachine
     ///   fsm.state(PlayerState::Jumping)
     ///      .onEnter([](PlayerData* ctx, double time) { ctx->velocity = 10; })
     ///      .onUpdate([](PlayerData* ctx, double time) {
-    ///          return StateTransition::stayInCurrent();
+    ///          return StateTransition::stay();
     ///      });
     [[nodiscard]] StateConfiguration state(StateEnum state) noexcept
     {

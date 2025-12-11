@@ -38,8 +38,8 @@ TEST(FSMPerformanceTest, StatelessLambdasAreFast)
             {
                 ctx->counter++;
                 if (ctx->counter >= ctx->transitionThreshold)
-                    return StateTransition::switchTo(PerfState::State2);
-                return StateTransition::stayInCurrent();
+                    return StateTransition::to(PerfState::State2);
+                return StateTransition::stay();
             });
 
     fsm.state(PerfState::State2)
@@ -48,8 +48,8 @@ TEST(FSMPerformanceTest, StatelessLambdasAreFast)
             {
                 ctx->counter++;
                 if (ctx->counter >= ctx->transitionThreshold * 2)
-                    return StateTransition::switchTo(PerfState::State3);
-                return StateTransition::stayInCurrent();
+                    return StateTransition::to(PerfState::State3);
+                return StateTransition::stay();
             });
 
     fsm.state(PerfState::State3)
@@ -57,7 +57,7 @@ TEST(FSMPerformanceTest, StatelessLambdasAreFast)
             [](PerfContext* ctx, double time)
             {
                 ctx->counter++;
-                return StateTransition::stayInCurrent();
+                return StateTransition::stay();
             });
 
     // Run many updates
@@ -81,7 +81,7 @@ TEST(FSMPerformanceTest, StatelessLambdasAreFast)
     // Performance expectation: Should complete in reasonable time
     // On modern hardware, 10k updates should be well under 100ms
     std::cout << "Stateless lambdas: " << updateCount << " updates in " << elapsed << "ms (" << (elapsed / updateCount * 1000.0)
-              << " μs/update)" << std::endl;
+              << " us/update)" << std::endl;
 
     EXPECT_LT(elapsed, 100.0) << "FSM is too slow for stateless lambdas";
 }
@@ -103,8 +103,8 @@ TEST(FSMPerformanceTest, CapturingLambdasWork)
                 ctx->counter++;
                 externalCounter++; // Capture external state
                 if (ctx->counter >= ctx->transitionThreshold)
-                    return StateTransition::switchTo(PerfState::State2);
-                return StateTransition::stayInCurrent();
+                    return StateTransition::to(PerfState::State2);
+                return StateTransition::stay();
             });
 
     fsm.state(PerfState::State2)
@@ -114,8 +114,8 @@ TEST(FSMPerformanceTest, CapturingLambdasWork)
                 ctx->counter++;
                 externalCounter++;
                 if (ctx->counter >= ctx->transitionThreshold * 2)
-                    return StateTransition::switchTo(PerfState::State3);
-                return StateTransition::stayInCurrent();
+                    return StateTransition::to(PerfState::State3);
+                return StateTransition::stay();
             });
 
     fsm.state(PerfState::State3)
@@ -124,7 +124,7 @@ TEST(FSMPerformanceTest, CapturingLambdasWork)
             {
                 ctx->counter++;
                 externalCounter++;
-                return StateTransition::stayInCurrent();
+                return StateTransition::stay();
             });
 
     // Run many updates
@@ -145,7 +145,7 @@ TEST(FSMPerformanceTest, CapturingLambdasWork)
     EXPECT_EQ(externalCounter, updateCount + 2);
 
     std::cout << "Capturing lambdas: " << updateCount << " updates in " << elapsed << "ms (" << (elapsed / updateCount * 1000.0)
-              << " μs/update)" << std::endl;
+              << " us/update)" << std::endl;
 
     EXPECT_LT(elapsed, 100.0) << "FSM is too slow for capturing lambdas";
 }
@@ -171,7 +171,7 @@ TEST(FSMPerformanceTest, StatelessVsCapturingComparison)
                     [](PerfContext* ctx, double time)
                     {
                         ctx->counter++;
-                        return StateTransition::stayInCurrent();
+                        return StateTransition::stay();
                     });
 
             statelessTotal += measureMs(
@@ -194,7 +194,7 @@ TEST(FSMPerformanceTest, StatelessVsCapturingComparison)
                     {
                         ctx->counter++;
                         dummy++;
-                        return StateTransition::stayInCurrent();
+                        return StateTransition::stay();
                     });
 
             capturingTotal += measureMs(

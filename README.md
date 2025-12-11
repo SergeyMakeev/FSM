@@ -41,8 +41,8 @@ int main() {
         })
         .onUpdate([](PlayerData* ctx, double time) {
             if (ctx->jumpPressed)
-                return StateTransition::switchTo(PlayerState::Jumping);
-            return StateTransition::stayInCurrent();
+                return StateTransition::to(PlayerState::Jumping);
+            return StateTransition::stay();
         });
     
     fsm.state(PlayerState::Jumping)
@@ -52,8 +52,8 @@ int main() {
         .onUpdate([](PlayerData* ctx, double time) {
             ctx->velocity -= 9.8f * time;
             if (ctx->velocity <= 0)
-                return StateTransition::switchTo(PlayerState::Idle);
-            return StateTransition::stayInCurrent();
+                return StateTransition::to(PlayerState::Idle);
+            return StateTransition::stay();
         });
     
     // Update every frame
@@ -103,8 +103,8 @@ ctest -C Debug
 
 ### StateTransition
 
-- `StateTransition::switchTo(NewState)` - Transition to a different state
-- `StateTransition::stayInCurrent()` - Remain in the current state
+- `StateTransition::to(NewState)` - Transition to a different state
+- `StateTransition::stay()` - Remain in the current state
 
 ### StateMachine
 
