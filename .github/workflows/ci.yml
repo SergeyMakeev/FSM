@@ -1,0 +1,67 @@
+name: CI
+
+on:
+  push:
+    branches: [ main, master, develop ]
+  pull_request:
+    branches: [ main, master, develop ]
+
+jobs:
+  build:
+    name: ${{ matrix.os }} - ${{ matrix.build_type }}
+    runs-on: ${{ matrix.os }}
+    
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        build_type: [Debug, Release]
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Configure CMake
+      run: cmake -S . -B build -DCMAKE_BUILD_TYPE=${{ matrix.build_type }}
+    
+    - name: Build
+      run: cmake --build build --config ${{ matrix.build_type }}
+    
+    - name: Run tests
+      run: ctest --test-dir build -C ${{ matrix.build_type }} --output-on-failure
+    
+  # Test with different compilers on Linux
+  build-linux-compilers:
+    name: Linux - ${{ matrix.compiler }}
+    runs-on: ubuntu-latest
+    
+    strategy:
+      fail-fast: false
+      matrix:
+        compiler:
+          - { cc: gcc-11, cxx: g++-11 }
+          - { cc: gcc-12, cxx: g++-12 }
+          - { cc: clang-14, cxx: clang++-14 }
+          - { cc: clang-15, cxx: clang++-15 }
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Install compiler
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y ${{ matrix.compiler.cxx }}
+    
+    - name: Configure CMake
+      env:
+        CC: ${{ matrix.compiler.cc }}
+        CXX: ${{ matrix.compiler.cxx }}
+      run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+    
+    - name: Build
+      run: cmake --build build --config Release
+    
+    - name: Run tests
+      run: ctest --test-dir build -C Release --output-on-failure
+
