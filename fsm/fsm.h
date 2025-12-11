@@ -76,7 +76,7 @@ class StateTransition
 /*
 **High-Performance Finite State Machine**
 
-A zero-allocation, header-only FSM designed for game engines and real-time systems.
+A zero-allocation, header-only FSM designed for real-time systems.
 
 **Design Philosophy:**
 This FSM prioritizes performance and simplicity over flexibility. It uses fixed-size arrays
@@ -85,8 +85,8 @@ in a compile-time-sized array indexed directly by the enum value for O(1) lookup
 
 **Template Parameters:**
 - StateEnum: Your enum class defining all states. MUST end with a 'Count' sentinel value.
-- ContextType: Your game data struct. The FSM doesn't own this - you control the lifetime.
-- Policy: TransitionPolicy controlling single-step vs chained transitions (defaults to Immediate).
+- ContextType: Your data struct. The FSM doesn't own this - you control the lifetime.
+- Policy: TransitionPolicy controlling single-step vs chained transitions (Immediate or SingleTransition).
 
 **Performance Characteristics:**
 - State transitions: O(1)
@@ -95,12 +95,12 @@ in a compile-time-sized array indexed directly by the enum value for O(1) lookup
   Modern compilers optimize stateless lambdas to zero overhead
 
 **Usage Example:**
-  enum class PlayerState { Idle, Running, Jumping, Count };
-  struct PlayerData { float velocity; };
+  enum class State { Idle, Running, Jumping, Count };
+  struct Data { float velocity; };
 
-  Fsm<PlayerState, PlayerData, TransitionPolicy::Immediate> fsm(PlayerState::Idle, &data);
+  Fsm<State, Data, TransitionPolicy::Immediate> fsm(State::Idle, &data);
   // Or with single-step transitions:
-  Fsm<PlayerState, PlayerData, TransitionPolicy::SingleTransition> fsm(...);
+  Fsm<State, Data, TransitionPolicy::SingleTransition> fsm(State::Idle, &data);
 */
 template <typename StateEnum, typename ContextType, TransitionPolicy Policy> class Fsm
 {
@@ -152,9 +152,9 @@ template <typename StateEnum, typename ContextType, TransitionPolicy Policy> cla
     It holds a reference to the actual callback storage and allows method chaining.
 
     The class is designed to be returned by value and then chained, like:
-      fsm.state(MyState::Idle)
-         .onEnter([](MyContext* ctx, double time) { ctx->counter = 0; })
-         .onUpdate([](MyContext* ctx, double time) { return StateTransition::stay(); });
+      fsm.state(State::Idle)
+         .onEnter([](Data* ctx, double time) { ctx->counter = 0; })
+         .onUpdate([](Data* ctx, double time) { return StateTransition::stay(); });
 
     The reference member makes this naturally non-copyable but moveable,
     which is perfect for the return-by-value pattern we use.
@@ -213,8 +213,8 @@ template <typename StateEnum, typename ContextType, TransitionPolicy Policy> cla
     This design gives you full control over memory management and layout.
 
     Example:
-      PlayerData data;
-      Fsm<PlayerState, PlayerData, TransitionPolicy::Immediate> fsm(PlayerState::Idle, &data);
+      Data data;
+      Fsm<State, Data, TransitionPolicy::Immediate> fsm(State::Idle, &data);
     */
     Fsm(StateEnum initialState, ContextType* contextData = nullptr)
         : contextPointer(contextData)
@@ -240,9 +240,9 @@ template <typename StateEnum, typename ContextType, TransitionPolicy Policy> cla
     Must be called BEFORE the first update() - we don't allow runtime reconfiguration
 
     Example:
-      fsm.state(PlayerState::Jumping)
-         .onEnter([](PlayerData* ctx, double time) { ctx->velocity = 10; })
-         .onUpdate([](PlayerData* ctx, double time) { return StateTransition::stay(); });
+      fsm.state(State::Active)
+         .onEnter([](Data* ctx, double time) { ctx->counter = 0; })
+         .onUpdate([](Data* ctx, double time) { return StateTransition::stay(); });
     */
     [[nodiscard]] StateConfiguration state(StateEnum state) noexcept
     {
