@@ -2,6 +2,8 @@
 
 A modern, header-only C++17 finite state machine library designed for game development and real-time applications.
 
+[![ci](https://github.com/SergeyMakeev/FSM/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/SergeyMakeev/FSM/actions/workflows/ci.yml)
+
 ## Features
 
 - **Header-only**: Just include `fsm/fsm.h` and you're ready to go
