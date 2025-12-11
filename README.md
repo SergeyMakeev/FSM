@@ -1,18 +1,18 @@
 # FSM - High-Performance Finite State Machine
 
-A modern, header-only C++17 finite state machine library designed for game development and real-time applications.
+A modern, header-only C++17 finite state machine library designed for real-time applications.
 
 [![ci](https://github.com/SergeyMakeev/FSM/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/SergeyMakeev/FSM/actions/workflows/ci.yml)
 
 ## Features
 
 - **Header-only**: Just include `fsm/fsm.h` and you're ready to go
-- **High performance**: Optimized for game loops with minimal overhead
+- **High performance**: Optimized for minimal overhead with zero heap allocations
 - **Type-safe**: Uses C++ enum classes for compile-time state validation
 - **Flexible callbacks**: Supports both stateless and capturing lambdas via std::function
 - **Configurable transition policy**: Choose between immediate chained transitions or single-step transitions
-- **Zero heap allocations**: All state data stored in fixed arrays
-- **Clean API**: Fluent interface for easy state configuration
+- **Fixed-size arrays**: All state data stored in compile-time arrays for excellent cache locality
+- **Clean API**: Simple interface for easy state configuration
 
 ## Quick Start
 
@@ -32,7 +32,9 @@ struct PlayerData {
 
 int main() {
     PlayerData data = {0.0f, false};
-    StateMachine<PlayerState, PlayerData> fsm(PlayerState::Idle, &data);
+    
+    // Create FSM with Immediate policy (allows chained transitions)
+    Fsm<PlayerState, PlayerData, TransitionPolicy::Immediate> fsm(PlayerState::Idle, &data);
     
     // Configure states
     fsm.state(PlayerState::Idle)
@@ -78,29 +80,32 @@ fsm.state(PlayerState::Running)
 
 ### Transition Policies
 
-The FSM supports two transition policies that control how state changes happen during `update()`:
+The FSM requires you to choose a transition policy that controls how state changes happen during `update()`:
 
-#### Immediate (Default)
-Allows multiple state transitions in a single `update()` call. When a state returns a transition, the FSM immediately enters the new state and calls its `onUpdate()` in the same frame.
+#### Immediate
+Allows multiple state transitions in a single `update()` call. When a state returns a transition, the FSM immediately enters the new state and calls its `onUpdate()` in the same frame. This continues until a state returns `stay()` or the safety limit is reached.
 
 ```cpp
-// Default behavior - chained transitions
-StateMachine<PlayerState, PlayerData> fsm(PlayerState::Idle, &data);
-// or explicitly:
-StateMachine<PlayerState, PlayerData, TransitionPolicy::Immediate> fsm(PlayerState::Idle, &data);
+// Chained transitions - multiple states can execute in one update
+Fsm<PlayerState, PlayerData, TransitionPolicy::Immediate> fsm(PlayerState::Idle, &data);
 ```
+
+**Best for:** Logic where multi-step transitions should happen atomically (e.g., death → respawn → idle all in one frame).
 
 #### SingleTransition
 Only one state transition per `update()` call. When a state returns a transition, the FSM switches to the new state but does NOT call the new state's `onEnter()` or `onUpdate()` until the next `update()` call. This provides more predictable, step-by-step behavior.
 
 ```cpp
-StateMachine<PlayerState, PlayerData, TransitionPolicy::SingleTransition> fsm(PlayerState::Idle, &data);
+// Single-step transitions - easier to debug and reason about
+Fsm<PlayerState, PlayerData, TransitionPolicy::SingleTransition> fsm(PlayerState::Idle, &data);
 ```
+
+**Best for:** Complex state machines where you need fine-grained control over timing.
 
 **Example comparison:**
 
 ```cpp
-// With Immediate policy (default):
+// With Immediate policy:
 // - Single update(): Idle -> Running -> Jumping (if both transitions happen)
 // - All onEnter and onUpdate callbacks execute in one frame
 
@@ -139,7 +144,7 @@ ctest -C Debug
 
 Controls how state transitions are processed:
 
-- `TransitionPolicy::Immediate` - Allow multiple transitions per `update()` (default)
+- `TransitionPolicy::Immediate` - Allow multiple transitions per `update()`
 - `TransitionPolicy::SingleTransition` - Only one transition per `update()`
 
 ### StateTransition
@@ -147,18 +152,21 @@ Controls how state transitions are processed:
 - `StateTransition::to(NewState)` - Transition to a different state
 - `StateTransition::stay()` - Remain in the current state
 
-### StateMachine
+### Fsm
 
 Template parameters:
 - `StateEnum` - Your enum class with states (must include a `Count` value)
 - `ContextType` - Your custom data structure
-- `Policy` - Transition policy (optional, defaults to `TransitionPolicy::Immediate`)
+- `Policy` - Transition policy (`TransitionPolicy::Immediate` or `TransitionPolicy::SingleTransition`)
 
 Methods:
 - `state(state)` - Configure callbacks for a state (returns StateConfiguration)
 - `update(time)` - Update the FSM for the current frame
 - `getCurrentState()` - Get the current state
 - `getContext()` - Access the context data
+
+Constants:
+- `kMaxTransitionsPerFrame` - Safety limit to prevent infinite transition loops (256)
 
 ### StateConfiguration
 
