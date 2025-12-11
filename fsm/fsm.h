@@ -221,9 +221,9 @@ template <typename StateEnum, typename ContextType> class StateMachine
 
         // Prevent infinite loops (e.g., StateA -> StateB -> StateA -> StateB...)
         // 256 transitions in one frame is definitely a bug in your state logic
-        constexpr size_t MaxTransitionsPerFrame = 256;
+        constexpr size_t kMaxTransitionsPerFrame = 256;
 
-        for (size_t transitionCount = 0; transitionCount < MaxTransitionsPerFrame; ++transitionCount)
+        for (size_t transitionCount = 0; transitionCount < kMaxTransitionsPerFrame; ++transitionCount)
         {
             // Get the callbacks for our current state
             StateCallbacks& currentCallbacks = allStateCallbacks[getStateIndex(currentActiveState)];
