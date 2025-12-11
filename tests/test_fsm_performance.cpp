@@ -32,7 +32,7 @@ TEST(FSMPerformanceTest, StatelessLambdasAreFast)
     StateMachine<PerfState, PerfContext> fsm(PerfState::State1, &context);
 
     // Configure with stateless lambdas
-    fsm.configureState(PerfState::State1)
+    fsm.state(PerfState::State1)
         .onUpdate(
             [](PerfContext* ctx, double time)
             {
@@ -42,7 +42,7 @@ TEST(FSMPerformanceTest, StatelessLambdasAreFast)
                 return StateTransition::stayInCurrent();
             });
 
-    fsm.configureState(PerfState::State2)
+    fsm.state(PerfState::State2)
         .onUpdate(
             [](PerfContext* ctx, double time)
             {
@@ -52,7 +52,7 @@ TEST(FSMPerformanceTest, StatelessLambdasAreFast)
                 return StateTransition::stayInCurrent();
             });
 
-    fsm.configureState(PerfState::State3)
+    fsm.state(PerfState::State3)
         .onUpdate(
             [](PerfContext* ctx, double time)
             {
@@ -96,7 +96,7 @@ TEST(FSMPerformanceTest, CapturingLambdasWork)
     int externalCounter = 0;
 
     // Configure with capturing lambdas
-    fsm.configureState(PerfState::State1)
+    fsm.state(PerfState::State1)
         .onUpdate(
             [&externalCounter](PerfContext* ctx, double time)
             {
@@ -107,7 +107,7 @@ TEST(FSMPerformanceTest, CapturingLambdasWork)
                 return StateTransition::stayInCurrent();
             });
 
-    fsm.configureState(PerfState::State2)
+    fsm.state(PerfState::State2)
         .onUpdate(
             [&externalCounter](PerfContext* ctx, double time)
             {
@@ -118,7 +118,7 @@ TEST(FSMPerformanceTest, CapturingLambdasWork)
                 return StateTransition::stayInCurrent();
             });
 
-    fsm.configureState(PerfState::State3)
+    fsm.state(PerfState::State3)
         .onUpdate(
             [&externalCounter](PerfContext* ctx, double time)
             {
@@ -166,7 +166,7 @@ TEST(FSMPerformanceTest, StatelessVsCapturingComparison)
             PerfContext context;
             StateMachine<PerfState, PerfContext> fsm(PerfState::State1, &context);
 
-            fsm.configureState(PerfState::State1)
+            fsm.state(PerfState::State1)
                 .onUpdate(
                     [](PerfContext* ctx, double time)
                     {
@@ -188,7 +188,7 @@ TEST(FSMPerformanceTest, StatelessVsCapturingComparison)
             StateMachine<PerfState, PerfContext> fsm(PerfState::State1, &context);
 
             int dummy = 0;
-            fsm.configureState(PerfState::State1)
+            fsm.state(PerfState::State1)
                 .onUpdate(
                     [&dummy](PerfContext* ctx, double time)
                     {

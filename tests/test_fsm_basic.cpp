@@ -53,7 +53,7 @@ TEST(FSMTest, CallsOnEnterOnFirstUpdate)
     TestContext context;
     StateMachine<TestState, TestContext> fsm(TestState::Idle, &context);
 
-    fsm.configureState(TestState::Idle)
+    fsm.state(TestState::Idle)
         .onEnter(
             [](TestContext* ctx, double time)
             {
@@ -76,7 +76,7 @@ TEST(FSMTest, CallsOnUpdateEveryFrame)
     TestContext context;
     StateMachine<TestState, TestContext> fsm(TestState::Idle, &context);
 
-    fsm.configureState(TestState::Idle)
+    fsm.state(TestState::Idle)
         .onUpdate(
             [](TestContext* ctx, double time)
             {
@@ -98,7 +98,7 @@ TEST(FSMTest, CanTransitionBetweenStates)
     StateMachine<TestState, TestContext> fsm(TestState::Idle, &context);
 
     // Configure Idle state to transition to Running
-    fsm.configureState(TestState::Idle)
+    fsm.state(TestState::Idle)
         .onUpdate(
             [](TestContext* ctx, double time)
             {
@@ -110,7 +110,7 @@ TEST(FSMTest, CanTransitionBetweenStates)
             });
 
     // Configure Running state
-    fsm.configureState(TestState::Running).onEnter([](TestContext* ctx, double time) { ctx->enterCount++; });
+    fsm.state(TestState::Running).onEnter([](TestContext* ctx, double time) { ctx->enterCount++; });
 
     EXPECT_EQ(fsm.getCurrentState(), TestState::Idle);
 
@@ -132,7 +132,7 @@ TEST(FSMTest, CallsOnExitWhenLeavingState)
     TestContext context;
     StateMachine<TestState, TestContext> fsm(TestState::Idle, &context);
 
-    fsm.configureState(TestState::Idle)
+    fsm.state(TestState::Idle)
         .onExit(
             [](TestContext* ctx, double time)
             {
@@ -156,12 +156,12 @@ TEST(FSMTest, CompleteStateTransitionLifecycle)
     TestContext context;
     StateMachine<TestState, TestContext> fsm(TestState::Idle, &context);
 
-    fsm.configureState(TestState::Idle)
+    fsm.state(TestState::Idle)
         .onEnter([](TestContext* ctx, double time) { ctx->enterCount++; })
         .onExit([](TestContext* ctx, double time) { ctx->exitCount++; })
         .onUpdate([](TestContext* ctx, double time) { return StateTransition::switchTo(TestState::Running); });
 
-    fsm.configureState(TestState::Running)
+    fsm.state(TestState::Running)
         .onEnter([](TestContext* ctx, double time) { ctx->enterCount++; })
         .onUpdate([](TestContext* ctx, double time) { return StateTransition::stayInCurrent(); });
 
@@ -179,7 +179,7 @@ TEST(FSMTest, StayInCurrentKeepsState)
     TestContext context;
     StateMachine<TestState, TestContext> fsm(TestState::Idle, &context);
 
-    fsm.configureState(TestState::Idle)
+    fsm.state(TestState::Idle)
         .onUpdate(
             [](TestContext* ctx, double time)
             {
@@ -202,16 +202,16 @@ TEST(FSMTest, SupportsChainedTransitions)
     StateMachine<TestState, TestContext> fsm(TestState::Idle, &context);
 
     // Idle immediately transitions to Running
-    fsm.configureState(TestState::Idle)
+    fsm.state(TestState::Idle)
         .onUpdate([](TestContext* ctx, double time) { return StateTransition::switchTo(TestState::Running); });
 
     // Running immediately transitions to Jumping
-    fsm.configureState(TestState::Running)
+    fsm.state(TestState::Running)
         .onEnter([](TestContext* ctx, double time) { ctx->enterCount++; })
         .onUpdate([](TestContext* ctx, double time) { return StateTransition::switchTo(TestState::Jumping); });
 
     // Jumping stays
-    fsm.configureState(TestState::Jumping)
+    fsm.state(TestState::Jumping)
         .onEnter([](TestContext* ctx, double time) { ctx->enterCount++; })
         .onUpdate([](TestContext* ctx, double time) { return StateTransition::stayInCurrent(); });
 
@@ -227,7 +227,7 @@ TEST(FSMTest, CanWorkWithoutContext)
 {
     StateMachine<TestState, TestContext> fsm(TestState::Idle, nullptr);
 
-    fsm.configureState(TestState::Idle)
+    fsm.state(TestState::Idle)
         .onUpdate(
             [](TestContext* ctx, double time)
             {
@@ -246,7 +246,7 @@ TEST(FSMTest, CanConfigureMultipleStates)
     TestContext context;
     StateMachine<TestState, TestContext> fsm(TestState::Idle, &context);
 
-    fsm.configureState(TestState::Idle)
+    fsm.state(TestState::Idle)
         .onUpdate(
             [](TestContext* ctx, double time)
             {
@@ -256,7 +256,7 @@ TEST(FSMTest, CanConfigureMultipleStates)
                 return StateTransition::stayInCurrent();
             });
 
-    fsm.configureState(TestState::Running)
+    fsm.state(TestState::Running)
         .onUpdate(
             [](TestContext* ctx, double time)
             {
@@ -266,7 +266,7 @@ TEST(FSMTest, CanConfigureMultipleStates)
                 return StateTransition::stayInCurrent();
             });
 
-    fsm.configureState(TestState::Jumping)
+    fsm.state(TestState::Jumping)
         .onUpdate(
             [](TestContext* ctx, double time)
             {
@@ -311,7 +311,7 @@ TEST(FSMTest, SupportsCapturingLambdas)
     int externalCounter = 0;
     bool transitionTriggered = false;
 
-    fsm.configureState(TestState::Idle)
+    fsm.state(TestState::Idle)
         .onEnter(
             [&externalCounter](TestContext* ctx, double time)
             {
@@ -325,7 +325,7 @@ TEST(FSMTest, SupportsCapturingLambdas)
                 return StateTransition::stayInCurrent();
             });
 
-    fsm.configureState(TestState::Running).onEnter([&externalCounter](TestContext* ctx, double time) { externalCounter += 10; });
+    fsm.state(TestState::Running).onEnter([&externalCounter](TestContext* ctx, double time) { externalCounter += 10; });
 
     EXPECT_EQ(externalCounter, 0);
 

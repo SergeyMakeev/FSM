@@ -33,7 +33,7 @@ int main() {
     StateMachine<PlayerState, PlayerData> fsm(PlayerState::Idle, &data);
     
     // Configure states
-    fsm.configureState(PlayerState::Idle)
+    fsm.state(PlayerState::Idle)
         .onEnter([](PlayerData* ctx, double time) {
             ctx->velocity = 0.0f;
         })
@@ -43,7 +43,7 @@ int main() {
             return StateTransition::stayInCurrent();
         });
     
-    fsm.configureState(PlayerState::Jumping)
+    fsm.state(PlayerState::Jumping)
         .onEnter([](PlayerData* ctx, double time) {
             ctx->velocity = 10.0f;
         })
@@ -68,7 +68,7 @@ The library supports capturing lambdas for convenience:
 ```cpp
 int score = 0;
 
-fsm.configureState(PlayerState::Running)
+fsm.state(PlayerState::Running)
     .onEnter([&score](PlayerData* ctx, double time) {
         score += 10;  // Capture external variables
     });
@@ -106,7 +106,7 @@ ctest -C Debug
 
 ### StateMachine
 
-- `configureState(state)` - Configure callbacks for a state (returns StateConfiguration)
+- `state(state)` - Configure callbacks for a state (returns StateConfiguration)
 - `update(time)` - Update the FSM for the current frame
 - `getCurrentState()` - Get the current state
 - `getContext()` - Access the context data

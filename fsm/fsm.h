@@ -176,12 +176,12 @@ template <typename StateEnum, typename ContextType> class StateMachine
     /// @return StateConfiguration object for chaining .onEnter().onUpdate().onExit()
     ///
     /// Example:
-    ///   fsm.configureState(PlayerState::Jumping)
+    ///   fsm.state(PlayerState::Jumping)
     ///      .onEnter([](PlayerData* ctx, double time) { ctx->velocity = 10; })
     ///      .onUpdate([](PlayerData* ctx, double time) {
     ///          return StateTransition::stayInCurrent();
     ///      });
-    [[nodiscard]] StateConfiguration configureState(StateEnum state) noexcept
+    [[nodiscard]] StateConfiguration state(StateEnum state) noexcept
     {
         assert(state < StateEnum::Count && "Invalid state - check your enum!");
         assert(!hasStartedUpdating && "Cannot configure states after calling update() - configure all states first!");
