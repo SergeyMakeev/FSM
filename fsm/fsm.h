@@ -44,9 +44,6 @@ Usage:
   return StateTransition::to(MyState::Running);   // Switch to Running state
   return StateTransition::stay();                 // Remain in current state
 
-The internal representation uses a uint64_t to store the target state value,
-which allows any enum type (regardless of underlying type) to be safely converted.
-The bool flag provides a fast check for the common "stay" case without comparing state values.
 */
 class StateTransition
 {
@@ -54,21 +51,20 @@ class StateTransition
     template <typename StateType> [[nodiscard]] static constexpr StateTransition to(StateType newState) noexcept
     {
         static_assert(std::is_enum_v<StateType>, "State must be an enum type");
-        return StateTransition(static_cast<uint64_t>(newState), false);
+        return StateTransition(static_cast<uint32_t>(newState));
     }
 
-    [[nodiscard]] static constexpr StateTransition stay() noexcept { return StateTransition(0, true); }
+    [[nodiscard]] static constexpr StateTransition stay() noexcept { return StateTransition(kStayInCurrentState); }
 
   private:
     template <typename, typename, TransitionPolicy> friend class Fsm;
 
-    uint64_t targetStateValue;
-    bool shouldRemainInCurrentState;
+    static constexpr uint32_t kStayInCurrentState = 0xffffffff;
+    uint32_t targetStateValue;
 
     // Private constructor forces use of named constructors to() and stay()
-    explicit constexpr StateTransition(uint64_t stateValue, bool stayInState) noexcept
+    explicit constexpr StateTransition(uint32_t stateValue) noexcept
         : targetStateValue(stateValue)
-        , shouldRemainInCurrentState(stayInState)
     {
     }
 };
@@ -197,10 +193,7 @@ template <typename StateEnum, typename ContextType, TransitionPolicy Policy> cla
     static constexpr std::size_t TotalStateCount = static_cast<std::size_t>(StateEnum::Count);
 
     // We require the enum to have a Count sentinel value for compile-time array sizing
-    // The 255 limit is arbitrary but reasonable - if you need more states, you probably
-    // need a different architecture (hierarchical FSM, behavior trees, etc.)
-    static_assert(TotalStateCount > 0 && TotalStateCount < 256,
-                  "You must have between 1 and 255 states. Did you forget the 'Count' value in your enum?");
+    static_assert(TotalStateCount > 0 && TotalStateCount <= 512, "You must have between 1 and 512 states.");
 
     /*
     **Constructor**
@@ -351,7 +344,8 @@ template <typename StateEnum, typename ContextType, TransitionPolicy Policy> cla
 
         const StateTransition transitionDecision = currentCallbacks.onUpdate(contextPointer, currentTime);
 
-        if (transitionDecision.shouldRemainInCurrentState)
+        // Check if the state wants to stay (magic value 0xffffffff)
+        if (transitionDecision.targetStateValue == StateTransition::kStayInCurrentState)
         {
             return false;
         }
