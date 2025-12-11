@@ -26,11 +26,11 @@ struct TestContext
     int jumpingUpdates = 0;
 };
 
-// Test: SingleTransition policy only allows one transition per update
-TEST(FSMSingleTransitionTest, OnlyOneTransitionPerUpdate)
+// Test: Deferred policy only allows one transition per update
+TEST(FSMDeferredTest, OnlyOneTransitionPerUpdate)
 {
     TestContext context;
-    Fsm<TestState, TestContext, TransitionPolicy::SingleTransition> fsm(TestState::Idle, &context);
+    Fsm<TestState, TestContext, TransitionPolicy::Deferred> fsm(TestState::Idle, &context);
 
     // Configure Idle to immediately transition to Running
     fsm.state(TestState::Idle)
@@ -69,8 +69,8 @@ TEST(FSMSingleTransitionTest, OnlyOneTransitionPerUpdate)
     EXPECT_EQ(context.jumpingUpdates, 1);  // Jumping was entered
 }
 
-// Test: Compare Immediate vs SingleTransition behavior
-TEST(FSMSingleTransitionTest, CompareWithImmediatePolicy)
+// Test: Compare Immediate vs Deferred behavior
+TEST(FSMDeferredTest, CompareWithImmediatePolicy)
 {
     // Test with Immediate policy (default)
     {
@@ -94,10 +94,10 @@ TEST(FSMSingleTransitionTest, CompareWithImmediatePolicy)
         EXPECT_EQ(context.enterCount, 2); // Both Running and Jumping entered
     }
 
-    // Test with SingleTransition policy
+    // Test with Deferred policy
     {
         TestContext context;
-        Fsm<TestState, TestContext, TransitionPolicy::SingleTransition> fsm(TestState::Idle, &context);
+        Fsm<TestState, TestContext, TransitionPolicy::Deferred> fsm(TestState::Idle, &context);
 
         fsm.state(TestState::Idle)
             .onUpdate([](TestContext* ctx, double time) { return StateTransition::to(TestState::Running); });
@@ -127,11 +127,11 @@ TEST(FSMSingleTransitionTest, CompareWithImmediatePolicy)
     }
 }
 
-// Test: SingleTransition policy with conditional transitions
-TEST(FSMSingleTransitionTest, ConditionalTransitions)
+// Test: Deferred policy with conditional transitions
+TEST(FSMDeferredTest, ConditionalTransitions)
 {
     TestContext context;
-    Fsm<TestState, TestContext, TransitionPolicy::SingleTransition> fsm(TestState::Idle, &context);
+    Fsm<TestState, TestContext, TransitionPolicy::Deferred> fsm(TestState::Idle, &context);
 
     fsm.state(TestState::Idle)
         .onUpdate(
@@ -175,11 +175,11 @@ TEST(FSMSingleTransitionTest, ConditionalTransitions)
     EXPECT_EQ(context.runningUpdates, 1); // Now updated
 }
 
-// Test: SingleTransition policy calls onExit correctly
-TEST(FSMSingleTransitionTest, OnExitCalledDuringTransition)
+// Test: Deferred policy calls onExit correctly
+TEST(FSMDeferredTest, OnExitCalledDuringTransition)
 {
     TestContext context;
-    Fsm<TestState, TestContext, TransitionPolicy::SingleTransition> fsm(TestState::Idle, &context);
+    Fsm<TestState, TestContext, TransitionPolicy::Deferred> fsm(TestState::Idle, &context);
 
     fsm.state(TestState::Idle)
         .onEnter([](TestContext* ctx, double time) { ctx->enterCount++; })
@@ -203,11 +203,11 @@ TEST(FSMSingleTransitionTest, OnExitCalledDuringTransition)
     EXPECT_EQ(context.exitCount, 1);  // No additional exits
 }
 
-// Test: SingleTransition with stay() keeps state
-TEST(FSMSingleTransitionTest, StayInCurrentKeepsState)
+// Test: Deferred with stay() keeps state
+TEST(FSMDeferredTest, StayInCurrentKeepsState)
 {
     TestContext context;
-    Fsm<TestState, TestContext, TransitionPolicy::SingleTransition> fsm(TestState::Idle, &context);
+    Fsm<TestState, TestContext, TransitionPolicy::Deferred> fsm(TestState::Idle, &context);
 
     fsm.state(TestState::Idle)
         .onUpdate(
@@ -225,11 +225,11 @@ TEST(FSMSingleTransitionTest, StayInCurrentKeepsState)
     EXPECT_EQ(context.updateCount, 3);
 }
 
-// Test: Fsm type alias works with SingleTransition policy
-TEST(FSMSingleTransitionTest, TypeAliasWorks)
+// Test: Fsm type alias works with Deferred policy
+TEST(FSMDeferredTest, TypeAliasWorks)
 {
     TestContext context;
-    Fsm<TestState, TestContext, TransitionPolicy::SingleTransition> fsm(TestState::Idle, &context);
+    Fsm<TestState, TestContext, TransitionPolicy::Deferred> fsm(TestState::Idle, &context);
 
     fsm.state(TestState::Idle)
         .onUpdate([](TestContext* ctx, double time) { return StateTransition::to(TestState::Running); });
@@ -239,7 +239,7 @@ TEST(FSMSingleTransitionTest, TypeAliasWorks)
 
     fsm.update(1.0);
     EXPECT_EQ(fsm.getCurrentState(), TestState::Running);
-    EXPECT_EQ(context.enterCount, 0); // Not entered yet with SingleTransition
+    EXPECT_EQ(context.enterCount, 0); // Not entered yet with Deferred
 
     fsm.update(2.0);
     EXPECT_EQ(context.enterCount, 1); // Now entered

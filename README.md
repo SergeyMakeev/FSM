@@ -92,12 +92,12 @@ Fsm<PlayerState, PlayerData, TransitionPolicy::Immediate> fsm(PlayerState::Idle,
 
 **Best for:** Logic where multi-step transitions should happen atomically (e.g., death → respawn → idle all in one frame).
 
-#### SingleTransition
+#### Deferred
 Only one state transition per `update()` call. When a state returns a transition, the FSM switches to the new state but does NOT call the new state's `onEnter()` or `onUpdate()` until the next `update()` call. This provides more predictable, step-by-step behavior.
 
 ```cpp
-// Single-step transitions - easier to debug and reason about
-Fsm<PlayerState, PlayerData, TransitionPolicy::SingleTransition> fsm(PlayerState::Idle, &data);
+// Deferred transitions - easier to debug and reason about
+Fsm<PlayerState, PlayerData, TransitionPolicy::Deferred> fsm(PlayerState::Idle, &data);
 ```
 
 **Best for:** Complex state machines where you need fine-grained control over timing.
@@ -109,7 +109,7 @@ Fsm<PlayerState, PlayerData, TransitionPolicy::SingleTransition> fsm(PlayerState
 // - Single update(): Idle -> Running -> Jumping (if both transitions happen)
 // - All onEnter and onUpdate callbacks execute in one frame
 
-// With SingleTransition policy:
+// With Deferred policy:
 // - Update 1: Idle transitions to Running (Running not entered yet)
 // - Update 2: Running enters and transitions to Jumping (Jumping not entered yet)
 // - Update 3: Jumping enters and stays
@@ -145,7 +145,7 @@ ctest -C Debug
 Controls how state transitions are processed:
 
 - `TransitionPolicy::Immediate` - Allow multiple transitions per `update()`
-- `TransitionPolicy::SingleTransition` - Only one transition per `update()`
+- `TransitionPolicy::Deferred` - Only one transition per `update()`
 
 ### StateTransition
 
@@ -157,7 +157,7 @@ Controls how state transitions are processed:
 Template parameters:
 - `StateEnum` - Your enum class with states (must include a `Count` value)
 - `ContextType` - Your custom data structure
-- `Policy` - Transition policy (`TransitionPolicy::Immediate` or `TransitionPolicy::SingleTransition`)
+- `Policy` - Transition policy (`TransitionPolicy::Immediate` or `TransitionPolicy::Deferred`)
 
 Methods:
 - `state(state)` - Configure callbacks for a state (returns StateConfiguration)

@@ -20,7 +20,7 @@ When a state transitions, the new state's onEnter and onUpdate execute immediate
 This continues until a state returns stay() or the safety limit is reached.
 Best for: logic where multi-step transitions should happen atomically.
 
-**SingleTransition**: Only one transition per update.
+**Deferred**: Only one transition per update.
 When a state transitions, we switch immediately but don't enter the new state until next update().
 This provides step-by-step execution that's easier to reason about and debug.
 Best for: complex state machines where you need fine-grained control over timing.
@@ -28,7 +28,7 @@ Best for: complex state machines where you need fine-grained control over timing
 enum class TransitionPolicy
 {
     Immediate,
-    SingleTransition
+    Deferred
 };
 
 /*
@@ -82,7 +82,7 @@ in a compile-time-sized array indexed directly by the enum value for O(1) lookup
 **Template Parameters:**
 - StateEnum: Your enum class defining all states. MUST end with a 'Count' sentinel value.
 - ContextType: Your data struct. The FSM doesn't own this - you control the lifetime.
-- Policy: TransitionPolicy controlling single-step vs chained transitions (Immediate or SingleTransition).
+- Policy: TransitionPolicy controlling single-step vs chained transitions (Immediate or Deferred).
 
 **Performance Characteristics:**
 - State transitions: O(1)
@@ -95,8 +95,8 @@ in a compile-time-sized array indexed directly by the enum value for O(1) lookup
   struct Data { float velocity; };
 
   Fsm<State, Data, TransitionPolicy::Immediate> fsm(State::Idle, &data);
-  // Or with single-step transitions:
-  Fsm<State, Data, TransitionPolicy::SingleTransition> fsm(State::Idle, &data);
+  // Or with deferred transitions:
+  Fsm<State, Data, TransitionPolicy::Deferred> fsm(State::Idle, &data);
 */
 template <typename StateEnum, typename ContextType, TransitionPolicy Policy> class Fsm
 {
@@ -262,7 +262,7 @@ template <typename StateEnum, typename ContextType, TransitionPolicy Policy> cla
 
     Flow: onEnter (if needed) -> onUpdate -> (if transitioning: onExit -> switch) -> loop
 
-    **With SingleTransition Policy:**
+    **With Deferred Policy:**
     Only one transition per update. When a state transitions, we switch immediately but
     don't enter the new state until the next update() call. This provides step-by-step
     execution that's easier to debug.
@@ -294,7 +294,7 @@ template <typename StateEnum, typename ContextType, TransitionPolicy Policy> cla
             // we transitioned too many times in one frame
             assert(false && "State machine exceeded maximum transitions per frame! Do you have an infinite loop in the state logic?");
         }
-        else // TransitionPolicy::SingleTransition
+        else // TransitionPolicy::Deferred
         {
             // Process one step and stop, even if a transition occurred
             // The new state will be entered on the next update() call
@@ -316,7 +316,7 @@ template <typename StateEnum, typename ContextType, TransitionPolicy Policy> cla
     4. If transitioning, validate the target, call onExit, switch states, return true
 
     The return value tells the caller whether a transition occurred, which determines
-    whether to continue looping (Immediate policy) or stop (SingleTransition policy).
+    whether to continue looping (Immediate policy) or stop (Deferred policy).
 
     States without an onUpdate callback are terminal - they can never transition out.
     This is useful for "game over" or other final states.
